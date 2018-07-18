@@ -1,0 +1,404 @@
+---
+title: "HW#3"
+author: "Vazgen Tadevosyan"
+date: "July 5, 2018"
+output: pdf_document
+---
+
+In this homework you will work on the Mobile Phones dataset containing information about different models of cell phones from different brands. In the dataset the following information is given:
+
+-Price of the cell phone.
+-Rating (given by the user 0-5).
+-Review (Review by the user).
+
+Solve the problems in R Markdown and submit the .Rmd file.
+--------------------------------------------------------------
+WARNINGS!!! (If not done you will lose points).
+1) Make sure to put titles on the plots and texts on axes.
+2) Make the plots pretty (Use colors, avoid overlapping texts on axes).
+--------------------------------------------------------------
+```{r warning F}
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(tm)
+library(wordcloud)
+library(Matrix)
+library(SnowballC)
+library(RColorBrewer)
+#
+mobile<-read.csv("Mobile.csv",stringsAsFactors = F)
+str(mobile)
+```
+
+
+#P1) (1p)
+Import the dataframe in R and with the use of dplyr, filter it in a way that all prices are greater or equal to 22$ and the Brands are among the following:
+
+("NOKIA","APPLE","SAMSUNG","LENOVO","HUAWEI","ACER","ALCATEL","AMAZON","ASUS","BlACKBERRY","SONY","GOOGLE","HTC","LG","MOTOROLA"). 
+Use data cleaning tools to adapt the Brand names to above mentioned.
+
+--------------------------------------------------------------
+```{r}
+#first lets make every thing uppercase
+mobile$Brand.Name<-toupper(mobile$Brand.Name)
+mobile<-mobile%>%
+  filter(mobile$Price>22)
+mobile <- mobile[!apply(mobile, 1, function(x) any(x=="")),] 
+mobile$Brand.Name<-trimws(mobile$Brand.Name)
+mobile<-mobile%>%
+  filter(mobile$Brand.Name %in% c("NOKIA","APPLE","SAMSUNG","LENOVO","HUAWEI","ACER","ALCATEL","AMAZON","ASUS","BlACKBERRY","SONY","GOOGLE","HTC","LG","MOTOROLA"))
+```
+
+#P2) (1p)
+With dyplr show the number of cellphones for each brand being sold in a descending order.  
+
+--------------------------------------------------------------
+```{r}
+mobile%>%
+  group_by(mobile$Brand.Name)%>%
+  summarise(sold=n())%>%
+  arrange(desc(sold))
+
+
+
+```
+
+#P3) (2p)
+Create 2 beautiful plots showing the average rating and average price of each brand. Arrange both in an ascending order and make some comments.
+
+--------------------------------------------------------------
+```{r }
+plot1<-mobile%>%
+  group_by(Brand=mobile$Brand.Name)%>%
+  summarise(avgPrice=mean(Price),avgScore=mean(Rating))%>%
+  arrange(avgPrice,avgScore)
+plot1
+ggplot(plot1,aes(avgScore,avgPrice,color=Brand))+geom_point()+
+  labs(title="the average rating and average price of each brand.",x=
+         "Rating",y="Price",legend="Brand")+
+  geom_text(aes(label=Brand),size=3.5,alpha=0.8)
+##from this we can conclude several thing such as we may say there is
+# a overrated Lenovo which has high price but did not satisfy users expectation.Moreover,
+ggplot(plot1,aes(avgScore,avgPrice,color=Brand))+geom_col(width = 0.02)+
+  labs(title="the average rating and average price of each brand.",x=
+         "Rating",y="Price",legend="Brand")+
+  geom_text(aes(label=Brand),size=3)
+
+
+
+```
+
+#P4) (1p)
+Create a barplot to display the distribution of 5 Ratings (0,1,2,3,4,5). Make comments.
+
+--------------------------------------------------------------
+```{r}
+ggplot(mobile,aes(mobile$Rating,fill=factor(mobile$Brand.Name)))+geom_bar(binwidth = 0.5)+
+  labs(title="Barplot of fistribution of scores ",x="Scores",fill="Brands")
+## people tend to maximum score when they are satisfied and when they are not, they give minimum score rather than giving average score.
+
+
+```
+
+#P5) (2p)
+Create a vector containing characters "Arman Hovespyan", "Davtyan Anna", "Anna 002 Hambardzumyan" and "/01 Sargis 239 Hovakimyan99". Build a regex pattern to extract only first names of the people.
+
+--------------------------------------------------------------
+```{r}
+vec<-c("Arman Hovespyan", "Davtyan Anna", "Anna 002 Hambardzumyan", "/01 Sargis 239 Hovakimyan99")
+vec<-trimws(str_remove_all(vec,"[0-9/]"))
+vec<-unlist(strsplit(vec,split = " "))
+vec<-str_remove_all(vec,pattern = '.+yan')
+vec<-vec[vec!=""]
+vec
+```
+
+#P6)
+a) (1p)
+Add the Review Vote for each cell phone at the end of Review sentence inside parenthesis (ex. It is a good cell phone(2)).
+
+b) (1p)
+Find the regex pattern to extract the Review votes with parenthesis and store it in a column Review.Votes. Also remove the Review Vote with parenthesis from Review.
+
+--------------------------------------------------------------
+```{r}
+#a
+mobile$Reviews<-paste(mobile$Reviews,sprintf("(%s)",mobile$Review.Votes),sep = "")
+#b
+mobile$Review.Votes<-unlist(str_extract_all(mobile$Review.Votes,pattern = '(\\d+)'))
+mobile$Reviews<-str_remove_all(mobile$Reviews,pattern='\\(\\d\\)')
+head(mobile$Reviews)
+```
+
+#P7) (2p)
+Remove column Review.Votes and with the use of dplyr and faceting plot the distribution of ratings for brands Apple, Samsung, HTC and Lenovo. Make some comments.
+
+--------------------------------------------------------------
+```{r}
+mobile$Review.Votes<-NULL
+unique(mobile$Brand.Name)
+str(mobile$Brand.Name)
+
+mobile%>%
+  select(Brand.Name,Rating)%>%
+  filter(Brand.Name %in% c("APPLE", "SAMSUNG", "HTC" , "LENOVO"))%>%
+  ggplot(aes(Rating))+geom_bar()+
+  facet_grid(.~Brand.Name)+ggtitle("Rating Distribution of each Brand")
+
+##from histograms we can say that the biggest demands of phones certanly have brands Samsung and Apple, besides their positive 
+#feedbacks is very noticable compared to other brands.  
+```
+
+#P8) (2p)
+Show the distribution of Review length (Number of characters). How long most of the users write about the cell phone ? (Uze zoom and change binwidth to clearly see the plot)
+
+--------------------------------------------------------------
+```{r}
+#first lets create another column
+mobile$nchar<-nchar(mobile$Reviews)
+ggplot(mobile,aes(mobile$nchar))+geom_histogram(binwidth = 8)+
+  xlim(0,400)+labs(title="the distribution of Review length",x="Number of characters",y="Reviews")
+## as we see people do not like to write long comments,most of the, prefer to write about 10-20 chars.
+  
+```
+
+
+#P9) (3p)
+Using functionalities from "tm" package create the Term Document Matrix for Reviews of 2 popular phones (Apple and Samsung). Construct a plot to show top 10 words people used in their reviews about these 2 phones. Make sure to remove any number, punctuations, stopwords and stem the review. In the problem you will need to subset the data because it will give error about allocation of matrix with huge size. Make some comments after. 
+
+--------------------------------------------------------------
+```{r}
+str(mobile)
+top10<-mobile%>%
+  filter(Brand.Name %in% c("SAMSUNG","APPLE") & nchar>30)%>%
+  select(Brand.Name,Reviews)
+## lets subset it
+top10<-subset.data.frame(top10,nchar(Reviews)<100)
+vs<-VectorSource(top10$Reviews)
+corpus<-VCorpus(vs)
+review_dtm<-TermDocumentMatrix(corpus,
+                               control = list(removeNumbers=T,removePunctuation=T,stopwords=T,stemming=T))
+review_dtm
+ma_review_dtm<-as.matrix(review_dtm,nchar(Reviews))
+freqs<-rowSums(ma_review_dtm)
+df_freq<-data.frame(terms=rownames(ma_review_dtm),
+                    freq=freqs,stringsAsFactors = F)
+df_freq<-df_freq[order(df_freq$freq,decreasing = T),]
+str(df_freq)
+df_top10<-df_freq[1:10,]
+ggplot(df_top10,aes(x=reorder(terms,freq),y=freq))+
+  geom_bar(stat="identity",fill=brewer.pal(n=10,name="Spectral"))+
+  coord_flip()+labs(x="Terms",y="Frequency",title="Top 10 Words for both Brands")
+
+
+
+```
+Here you can see that phone word dominates in reviews about phones))
+
+
+
+
+#P10) (1p)
+Construct wordclouds for SAMSUNG and APPLE to make the term-frequency more appealing.
+
+--------------------------------------------------------------
+```{r}
+SM<-mobile%>%
+  filter(Brand.Name %in% c("SAMSUNG","APPLE") & nchar>20 & nchar < 100)%>%
+  select(Brand.Name,Reviews)
+samsung<-SM[SM$Brand.Name=='SAMSUNG',]
+apple<-SM[SM$Brand.Name=='APPLE',]
+samsung_vs<-VectorSource(samsung$Reviews)
+apple_vs<-VectorSource(apple$Reviews)
+s_corpus<-VCorpus(samsung_vs)
+a_corpus<-VCorpus(apple_vs)
+
+samsung_tdm<-TermDocumentMatrix(s_corpus,control = list(removeNumbers=T,removePunctuation=T,stopwords=T,stemming=T))
+apple_tdm<-TermDocumentMatrix(a_corpus,control = list(removeNumbers=T,removePunctuation=T,stopwords=T,stemming=T))
+samsung_m<-as.matrix(samsung_tdm)
+sfreqs<-rowSums(samsung_m)
+apple_m<-as.matrix(apple_tdm)
+afreqs<-rowSums(apple_m)
+samsung_df<-data.frame(terms=rownames(samsung_m),
+                      freqs=sfreqs,stringsAsFactors = F)
+apple_df<-data.frame(terms=rownames(apple_m),
+                      freqs=afreqs,stringsAsFactors = F)
+
+samsung_df<-samsung_df[order(samsung_df$freqs,decreasing = T),]
+apple_df<-apple_df[order(apple_df$freqs,decreasing = T),]
+head(samsung_df)
+str(samsung_df)
+set.seed(1)
+wordcloud(words =samsung_df$terms, freq = samsung_df$freqs, min.freq = 20,max.words=100, random.order=FALSE, colors=brewer.pal(8, "Dark2"))
+
+wordcloud(words =apple_df$terms, freq = apple_df$freqs, min.freq = 20,max.words=100, random.order=FALSE, colors=brewer.pal(8, "Dark2"))
+
+
+```
+
+#P11) (2p)
+Solve #P9 and #P10 using tf-idf weighting. Compare and make comments about how different are the 2 methods used.
+
+--------------------------------------------------------------
+```{r}
+review_dtm<-TermDocumentMatrix(corpus,
+                               control = list(removeNumbers=T,removePunctuation=T,stopwords=T,stemming=T,weighting=weightTfIdf))
+review_dtm
+ma_review_dtm<-as.matrix(review_dtm,nchar(Reviews))
+freqs<-rowSums(ma_review_dtm)
+df_freq<-data.frame(terms=rownames(ma_review_dtm),
+                    freq=freqs,stringsAsFactors = F)
+df_freq<-df_freq[order(df_freq$freq,decreasing = T),]
+str(df_freq)
+df_top10<-df_freq[1:10,]
+ggplot(df_top10,aes(x=reorder(terms,freq),y=freq))+
+  geom_bar(stat="identity",fill=brewer.pal(n=10,name="Spectral"))+
+  coord_flip()+labs(x="Terms",y="Frequency",title="Top 10 Words for both Brands")
+## samsung and apple
+samsung_tdm<-TermDocumentMatrix(s_corpus,control = list(removeNumbers=T,removePunctuation=T,stopwords=T,stemming=T,weighting=weightTfIdf))
+apple_tdm<-TermDocumentMatrix(a_corpus,control = list(removeNumbers=T,removePunctuation=T,stopwords=T,stemming=T,weighting=weightTfIdf))
+samsung_m<-as.matrix(samsung_tdm)
+sfreqs<-rowSums(samsung_m)
+apple_m<-as.matrix(apple_tdm)
+afreqs<-rowSums(apple_m)
+samsung_df<-data.frame(terms=rownames(samsung_m),
+                      freqs=sfreqs,stringsAsFactors = F)
+apple_df<-data.frame(terms=rownames(apple_m),
+                      freqs=afreqs,stringsAsFactors = F)
+
+samsung_df<-samsung_df[order(samsung_df$freqs,decreasing = T),]
+apple_df<-apple_df[order(apple_df$freqs,decreasing = T),]
+head(samsung_df)
+str(samsung_df)
+set.seed(1)
+wordcloud(words =samsung_df$terms, freq = samsung_df$freqs, min.freq = 20,max.words=100, random.order=FALSE, colors=brewer.pal(8, "Dark2"))
+
+wordcloud(words =apple_df$terms, freq = apple_df$freqs, min.freq = 20,max.words=100, random.order=FALSE, colors=brewer.pal(8, "Dark2"))
+
+
+```
+Difference is that when we make wordcloud by weighting aprrouch it decrease weight of the words which happend in almost every sentence so it is more useful when we want to get valuable information about some product that we know.
+
+
+
+#P12) (2p)
+Do sentiment analysis on cell-phone reviews and find average polarity of each brand. Before make sure to covert non ASCII characters to ASCII. Run it on 5000 reviews and show the top 10 brands with the highest polarity score.
+
+--------------------------------------------------------------
+```{r}
+library(qdap)
+mobile$Reviews<-iconv(mobile$Reviews,to="ASCII",sub="")
+unique(mobile$Brand.Name[1:5000])
+##we need to subset 5000 rows randomly because as you see there are only 9  phones to do sentiment analysis on first 5000 rows.
+sent<-mobile[sample(nrow(mobile), 5000), ]
+unique(sent$Brand.Name)
+sent$Reviews<-str_remove_all(sent$Reviews,pattern = "[:punct:]")
+sent<-sent%>%
+  filter(sent$nchar>15 & sent$nchar<150)
+pol<-polarity(text.var = sent$Reviews,grouping.var = sent$Brand.Name)
+pol<-scores(pol)
+pol<-pol%>%
+  arrange(desc(pol$ave.polarity))
+pol
+##however this can be violated because words are not normally distributed.
+
+
+
+```
+
+#P13)
+a) (1p)
+Do sentiment analysis on each review by the user and find polarity scores of reviews done by 1000 users.
+
+b) (1p)
+Create a dataframe contining the author number (id), phone brand, his/her review and the rating he/she gave to the cell phone.
+
+c) (1p)
+Create a new column (Average_Polaraity) in the dataframe constructed in b) and fill it with the respective polarity score of a review. 
+
+d) (2p)
+Create a boxplot to show how the rating given by the user and polarity score of his/her review are interconnected. Make some comments.
+
+--------------------------------------------------------------
+```{r}
+#1
+users<-mobile[sample(nrow(mobile), 1000), ]
+users$Reviews<-str_remove_all(users$Reviews,pattern = "[:punct:]")
+user_id<-c(1:1000)
+df<-data.frame(user,users$Reviews)
+avg<-scores(polarity(text.var = df$users.Reviews,grouping.var = df$user))
+head(avg)
+#2
+df2<-data.frame(BRAND=users$Brand.Name,REVIEWS=users$Reviews,RATING=users$Rating)
+df3<-cbind(id=rownames(df2),df2)
+head(df3)
+#3
+df3$POLARITY<-avg$ave.polarity
+head(df3,2)
+#4
+fill <- "#4271AE"
+line <- "#1F3552"
+
+ggplot(df3, aes(factor(df3$RATING),df3$POLARITY))+geom_boxplot(fill = fill, colour = line) +
+        scale_y_continuous(name = "average polarity score")+
+        scale_x_discrete(name = "Rating") +
+        ggtitle("The rating given by the user and polarity score") +
+        theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+              axis.line.y = element_line(size = 0.5, colour = "black"),
+              legend.position = "bottom", legend.direction = "horizontal",
+              legend.box = "horizontal",
+              legend.key.size = unit(1, "cm"),
+              axis.title = element_text(size = 12),
+              legend.text = element_text(size = 9),
+              legend.title=element_text(face = "bold", size = 9))  
+
+##as we see there is positive correlation but it is noticable that we have outliers,
+#for instance there are some comments that were given given negative polarity score
+# at the same time having 5 or 4 sciore.Quite contrary  some positive reviews present
+# which have 1 or 2 scores. So we may coclude people could make mistake while giving
+#rating score.
+
+
+
+```
+
+#P14)
+a) (1p) 
+In the dataframe constructed in problem #P13 b) change the Average_Polarity value to "Positive" if Average_Polarity >0, "Negative" if Average_Polarity <0 and "Neutral" if Average_Polarity =0.
+
+b) (1p) 
+Use faceting and construct a barplot to see the number of Positive, Negative and Neutral reviews given to cell phones for a particular brand.
+
+--------------------------------------------------------------
+```{r}
+str(df3$POLARITY)
+df3$POLARITY<-ifelse(df3$POLARITY<0,"Negative",ifelse(df3$POLARITY==0,"Neutral","Positive"))
+df3<-df3[complete.cases(df3),]
+str(df3)
+df3$POLARITY<-factor(df3$POLARITY)
+ggplot(df3,aes(POLARITY,fill=BRAND))+geom_bar()+facet_grid(.~BRAND)+
+  theme(axis.text.x   = element_blank(),
+        strip.text = element_text(angle=60,size = 8))+
+  ggtitle("Distribution of Positive, Negative and Neutral reviews for each brand.")
+
+
+```
+
+#P15) (2p)
+Construct dissimilarity matrix showing how dissimilar are the cell phone reviews for different pairs of Brands (Hint! ??Dissimilarity from qdap). Convert it to R matrix and print the brands which reviews are the most similar and different. (Hint! ?which)
+--------------------------------------------------------------
+```{r}
+??Dissimilarity
+dis_my<-as.matrix(Dissimilarity(df3$REVIEWS,grouping.var = df3$BRAND))
+dis_my
+which(dis_my==max(dis_my),arr.ind = T,useNames = T)
+##most similar samsung apple
+which(dis_my==min(dis_my),arr.ind = T,useNames = T)
+## we need not count zeros because they happen when Brands compares with itself
+dis_my[dis_my==0]<-NA
+which(dis_my==min(dis_my,na.rm = T),arr.ind = T,useNames = T)
+#most different samsung and Acer
+
+```
+
